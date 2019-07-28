@@ -54,13 +54,13 @@ EXAMPLES
 
 ./nuage-vwan -h
 
-create VWAN -> create vwan, vhub and vpnGW
+create VWAN -> create vwan, vhub and vpnGW on AZURE
 
 ./nuage-vwan -o createVWAN
 
-add VWAN site -> create VPN Site and update the VPN GW by adding the site
+add VWAN site -> create VPN Site and update the VPN GW by adding the site on AZURE
 
-./nuage-vwan -nsg nsg-site1.yml -o addSite
+./nuage-vwan -nsg nsg-site1.yml -o addVWANSite
 
 add Nuage site -> create VWAN site on Nuage VSD based on nsg-site1.yml info
 
