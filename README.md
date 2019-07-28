@@ -1,5 +1,9 @@
 # nuage-vwan
 
+BACKGROUND
+
+https://docs.microsoft.com/en-us/azure/virtual-wan/
+
 AUTHENTICATING
 
 Let’s start ! However, before we proceed, we first need to somehow authenticate agains Azure API. For Azure this means creating a service principal account that our program will use to authenticate and assume a role with permissions needed to execute API actions.
@@ -10,29 +14,55 @@ az ad sp create-for-rbac —sdk-auth > my.auth
 
 AZURE ENVIRONMENT\n
 
-Initialize authentication token\n
+Initialize authentication token
 
-export AZURE_AUTH_LOCATION="/Users/henderiw/my.auth"\n
+export AZURE_AUTH_LOCATION="/Users/henderiw/my.auth"
 
-Initialize your resource group name and location\n
+Initialize your resource group name and location
 
-export AZURE_RG_NAME="vWAN"\n
-export AZURE_RG_LOCATION="northeurope"\n
+export AZURE_RG_NAME="vWAN"
+export AZURE_RG_LOCATION="northeurope"
 
-Initialize the VSD variables\n
+Initialize the VSD variables
 
-export VSD_URL = "<your URL>"\n
+export VSD_URL = "<your URL>"
     example your URL> https://10.0.0.1:8443\n
-export VSD_USER = "<user>"\n
-export VSD_PASSWORD = "<password>"\n
-export VSD_ENTERPRISE = "<enterprise>"\n
+export VSD_USER = "<user>"
+export VSD_PASSWORD = "<password>"
+export VSD_ENTERPRISE = "<enterprise>"
 
 Initialize the following variables using the storage account\n
 
-export AZURE_STORAGE_ACCOUNT="<your storage account>"\n
-export AZURE_STORAGE_ACCESS_KEY="<your storage access key>"\n
+export AZURE_STORAGE_ACCOUNT="<your storage account>"
+export AZURE_STORAGE_ACCESS_KEY="<your storage access key>"
 
-YML FILES\n
+YML FILES
+
+Assist in adding sites on vWAN and Nuage
+
+nsg_data:
+  enterprise: vspk_public 
+  nsg_name: vspkNsgE300WifiLte1
+  nsg_port: lte0
+  public_ip: 81.246.71.160
+  bgp_enabled: false
+  bgp_nsg_asn: 1111
+  lan_subnet: 
+    - 172.0.5.0/24
+
+EXAMPLES
+
+create VWAN -> create vwan, vhub and vpnGW
+
+go run main.go -o createVWAN
+
+add VWAN site -> create VPN Site and update the VPN GW by adding the site
+
+go run main.go -nsg nsg-site1.yml -o addSite
+
+add Nuage site -> create VWAN site on Nuage VSD based on nsg-site1.yml info
+
+go run main.go -nsg nsg-site1.yml -o addNuageSite
 
 
 
