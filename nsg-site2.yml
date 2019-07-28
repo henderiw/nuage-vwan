@@ -1,6 +1,7 @@
 nsg_data:
   enterprise: vspk_public 
   nsg_name: vspkNsgE300TestingAdditionalSite
+  nsg_port: port1
   public_ip: 1.1.1.1
   bgp_enabled: false
   bgp_nsg_asn: 1111

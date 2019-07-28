@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,7 +13,16 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/to"
 	azurewrapper "github.com/henderiw/azure-wrapper"
+	nuagewrapper "github.com/henderiw/nuage-wrapper"
+	"github.com/nuagenetworks/go-bambou/bambou"
+	"github.com/nuagenetworks/vspk-go/vspk"
 )
+
+// VSD credential parameters
+var vsdURL, vsdUser, vsdPass, vsdEnterprise string
+
+// Usr is a user
+var Usr *vspk.Me
 
 // Authenticate with the Azure services using file-based authentication
 func init() {
@@ -29,6 +39,10 @@ func init() {
 	azurewrapper.ClientData.SubscriptionID = (*authInfo)["subscriptionId"].(string)
 	azurewrapper.ClientData.ResourceGroupName = os.Getenv("AZURE_RG_NAME")
 	azurewrapper.ClientData.ResourceGroupLocation = os.Getenv("AZURE_RG_LOCATION")
+	vsdURL = os.Getenv("VSD_URL")
+	vsdUser = os.Getenv("VSD_USER")
+	vsdPass = os.Getenv("VSD_PASSWORD")
+	vsdEnterprise = os.Getenv("VSD_ENTERPRISE")
 
 }
 
@@ -210,13 +224,186 @@ func deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azu
 	azurewrapper.DeleteVpnSite(nsgConf.NsgData.NsgName)
 }
 
+func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
+	rcvdAzureVWanData, readErr := ioutil.ReadFile(nsgConf.NsgData.NsgName)
+	if readErr != nil {
+		log.Fatal(readErr)
+	}
+
+	log.Printf("File contents: %s\n", rcvdAzureVWanData)
+
+	// init the empty structure
+	var cfg []azurewrapper.AzureVWanCfg
+
+	// unmarshal (deserialize) the json and save the result in the struct &cfg
+	err := json.Unmarshal([]byte(rcvdAzureVWanData), &cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	vwanHubIP1 := cfg[0].VpnSiteConnections[0].GatewayConfiguration.IPAddresses.Instance0
+	vwanHubIP2 := cfg[0].VpnSiteConnections[0].GatewayConfiguration.IPAddresses.Instance1
+	//vwanSiteName := cfg[0].VpnSiteConfiguration.Name
+	//vwanSiteIP := cfg[0].VpnSiteConfiguration.IPAddress
+	//vwanSiteBGPEnabled := cfg[0].VpnSiteConnections[0].ConnectionConfiguration.IsBgpEnabled
+	vwanSitePSK := cfg[0].VpnSiteConnections[0].ConnectionConfiguration.PSK
+	//vwanSiteSAsize := cfg[0].VpnSiteConnections[0].ConnectionConfiguration.IPsecParameters.SADataSizeInKilobytes
+	//vwanSiteSALifeTime := cfg[0].VpnSiteConnections[0].ConnectionConfiguration.IPsecParameters.SALifeTimeInSeconds
+
+	//Start session to VSD
+	var s *bambou.Session
+	s, Usr = vspk.NewSession(vsdUser, vsdPass, vsdEnterprise, vsdURL)
+	if err := s.Start(); err != nil {
+		log.Println("Unable to connect to Nuage VSD: " + err.Description)
+		os.Exit(1)
+	}
+
+	//find enterprise
+	enterpriseCfg := map[string]interface{}{
+		"Name": nsgConf.NsgData.Enterprise,
+	}
+
+	enterprise := nuagewrapper.NuageEnterprise(enterpriseCfg, Usr)
+
+	//create or get PSK
+
+	ikePSKCfg := map[string]interface{}{
+		"Name":           "vspkdemoAzure",
+		"Description":    "vspkdemoAzure",
+		"UnencryptedPSK": vwanSitePSK,
+	}
+
+	ikePSK := nuagewrapper.NuageCreateIKEPSK(ikePSKCfg, enterprise)
+
+	//create IKE Gateway(s)
+
+	ikeGatewayCfg1 := map[string]interface{}{
+		"Name":        "vspkdemoAzureIKEGatewayName1",
+		"Description": "vspkdemoAzureIKEGatewayName1",
+		"IKEVersion":  "V2",
+		"IPAddress":   vwanHubIP1,
+	}
+
+	ikeGateway1 := nuagewrapper.NuageCreateIKEGateway(ikeGatewayCfg1, enterprise)
+
+	ikeGatewayCfg2 := map[string]interface{}{
+		"Name":        "vspkdemoAzureIKEGatewayName2",
+		"Description": "vspkdemoAzureIKEGatewayName2",
+		"IKEVersion":  "V2",
+		"IPAddress":   vwanHubIP2,
+	}
+
+	ikeGateway2 := nuagewrapper.NuageCreateIKEGateway(ikeGatewayCfg2, enterprise)
+
+	//Create IKE Encryption Profile
+
+	ikeEncryptionProfileCfg := map[string]interface{}{
+		"Name":                              "vspkdemoAzureIKEEncryptionProfile",
+		"Description":                       "vspkdemoAzureIKEEncryptionProfile",
+		"DPDMode":                           "REPLY_ONLY",
+		"ISAKMPAuthenticationMode":          "PRE_SHARED_KEY",
+		"ISAKMPDiffieHelmanGroupIdentifier": "GROUP_2_1024_BIT_DH",
+		"ISAKMPEncryptionAlgorithm":         "AES256",
+		"ISAKMPEncryptionKeyLifetime":       28800,
+		"ISAKMPHashAlgorithm":               "SHA256",
+		"IPsecEnablePFS":                    true,
+		"IPsecEncryptionAlgorithm":          "AES256",
+		"IPsecPreFragment":                  true,
+		"IPsecSALifetime":                   3600,
+		"IPsecAuthenticationAlgorithm":      "HMAC_SHA256",
+		"IPsecSAReplayWindowSize":           "WINDOW_SIZE_64",
+	}
+
+	ikeEncryptionProfile := nuagewrapper.NuageCreateIKEEncryptionProfile(ikeEncryptionProfileCfg, enterprise)
+
+	//Create IKE Gateway Profile
+
+	ikeGatewayProfileCfg1 := map[string]interface{}{
+		"Name":                             "vspkdemoAzureIKEGatewayProfile1",
+		"Description":                      "vspkdemoAzureIKEGatewayProfile1",
+		"AssociatedIKEAuthenticationID":    ikePSK.ID,
+		"IKEGatewayIdentifier":             vwanHubIP1,
+		"IKEGatewayIdentifierType":         "ID_IPV4_ADDR",
+		"AssociatedIKEGatewayID":           ikeGateway1.ID,
+		"AssociatedIKEEncryptionProfileID": ikeEncryptionProfile.ID,
+	}
+
+	ikeGatewayProfile1 := nuagewrapper.NuageCreateIKEGatewayProfile(ikeGatewayProfileCfg1, enterprise)
+
+	ikeGatewayProfileCfg2 := map[string]interface{}{
+		"Name":                             "vspkdemoAzureIKEGatewayProfile2",
+		"Description":                      "vspkdemoAzureIKEGatewayProfile2",
+		"AssociatedIKEAuthenticationID":    ikePSK.ID,
+		"IKEGatewayIdentifier":             vwanHubIP2,
+		"IKEGatewayIdentifierType":         "ID_IPV4_ADDR",
+		"AssociatedIKEGatewayID":           ikeGateway2.ID,
+		"AssociatedIKEEncryptionProfileID": ikeEncryptionProfile.ID,
+	}
+
+	ikeGatewayProfile2 := nuagewrapper.NuageCreateIKEGatewayProfile(ikeGatewayProfileCfg2, enterprise)
+
+	nsGatewayCfg := map[string]interface{}{
+		"Name":                  nsgConf.NsgData.NsgName,
+		"TCPMSSEnabled":         true,
+		"TCPMaximumSegmentSize": 1330,
+		"NetworkAcceleration":   "NONE",
+	}
+
+	nsGateway := nuagewrapper.NuageNSG(nsGatewayCfg, enterprise)
+
+	nsPortCfg := map[string]interface{}{
+		"Name": nsgConf.NsgData.NsgPort,
+	}
+
+	nsPort := nuagewrapper.NuageNSGPort(nsPortCfg, nsGateway)
+
+	nsVlanCfg := map[string]interface{}{
+		"Value": 0,
+	}
+
+	nsVlan := nuagewrapper.NuageVlan(nsVlanCfg, nsPort)
+
+	ikeGatewayConnCfg1 := map[string]interface{}{
+		"Name":                          "vspkdemoAzureIKEGatewayConnection1",
+		"Description":                   "vspkdemoAzureIKEGatewayConnection1",
+		"NSGIdentifier":                 nsgConf.NsgData.NsgName,
+		"NSGIdentifierType":             "ID_KEY_ID",
+		"NSGRole":                       "INITIATOR",
+		"AllowAnySubnet":                true,
+		"AssociatedIKEGatewayProfileID": ikeGatewayProfile1.ID,
+		"AssociatedIKEAuthenticationID": ikePSK.ID,
+	}
+
+	ikeGatewayConn1 := nuagewrapper.NuageIKEGatewayConnection(ikeGatewayConnCfg1, nsVlan)
+	fmt.Println(ikeGatewayConn1)
+
+	ikeGatewayConnCfg2 := map[string]interface{}{
+		"Name":                          "vspkdemoAzureIKEGatewayConnection2",
+		"Description":                   "vspkdemoAzureIKEGatewayConnection2",
+		"NSGIdentifier":                 nsgConf.NsgData.NsgName,
+		"NSGIdentifierType":             "ID_KEY_ID",
+		"NSGRole":                       "INITIATOR",
+		"AllowAnySubnet":                true,
+		"AssociatedIKEGatewayProfileID": ikeGatewayProfile2.ID,
+		"AssociatedIKEAuthenticationID": ikePSK.ID,
+	}
+
+	ikeGatewayConn2 := nuagewrapper.NuageIKEGatewayConnection(ikeGatewayConnCfg2, nsVlan)
+	fmt.Println(ikeGatewayConn2)
+
+}
+
+func deleteNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
+
+}
+
 func main() {
 
 	var vwan, enterprise, nsg, operation string
 	flag.StringVar(&vwan, "vwan", "test", "vwan name")
 	flag.StringVar(&enterprise, "enterprise", "vspk_public", "enterprise name")
 	flag.StringVar(&nsg, "nsg", "nsg-site1.yml", "nsg name or group or all nsgs in the enterprise")
-	flag.StringVar(&operation, "o", "getVWAN", "createVWAN, deleteVWAN, getVWAN, addSite or deleteSite")
+	flag.StringVar(&operation, "o", "getVWAN", "createVWAN, deleteVWAN, getVWAN, addVWANSite, deleteVWANSite, addNuageSite, deleteNuageSite")
 
 	flag.Parse()
 
@@ -242,8 +429,8 @@ func main() {
 		log.Println("get Workflow")
 		getVwanWorkflow(vwanName, vwanHubName, vpnGWName)
 		break
-	case "addSite":
-		log.Println("addSite Workflow")
+	case "addVWANSite":
+		log.Println("add VWAN Site Workflow")
 		if nsg != "all" {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
@@ -251,12 +438,29 @@ func main() {
 			addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, nsgConf)
 		}
 		break
-	case "deleteSite":
-		log.Println("deleteSite Workflow")
+	case "deleteVWANSite":
+		log.Println("delete VWAN Site Workflow")
 		if nsg != "all" {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
 			deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, nsgConf)
+		}
+		break
+	case "addNuageSite":
+		log.Println("add Nuage Site Workflow")
+		if nsg != "all" {
+			var nsgConf azurewrapper.NsgConfYML
+			nsgConf.GetConf(nsg)
+			log.Println(nsgConf)
+			addNuageSiteWorkflow(nsgConf)
+		}
+		break
+	case "deleteNuageSite":
+		log.Println("delete Nuage Site Workflow")
+		if nsg != "all" {
+			var nsgConf azurewrapper.NsgConfYML
+			nsgConf.GetConf(nsg)
+			deleteNuageSiteWorkflow(nsgConf)
 		}
 		break
 	default:

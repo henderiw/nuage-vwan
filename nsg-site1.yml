@@ -1,6 +1,7 @@
 nsg_data:
   enterprise: vspk_public 
   nsg_name: vspkNsgE300WifiLte1
+  nsg_port: lte0
   public_ip: 81.246.71.160
   bgp_enabled: false
   bgp_nsg_asn: 1111
