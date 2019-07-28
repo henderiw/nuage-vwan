@@ -37,13 +37,13 @@ func createVwanWorkflow(vwanName, vwanHubName, vpnGWName string) {
 	log.Printf("vwan Created Name: %s \n", to.String(vwan.Name))
 
 	vhub, _ := azurewrapper.CreateVhub(vwanHubName, to.String(vwan.ID), "10.1.1.0/24")
-	log.Printf("vhub: %#v \n", vhub)
+	log.Printf("vhub Created Name: %s \n", to.String(vhub.Name))
 	log.Printf("vhub Created ID: %s \n", to.String(vhub.ID))
 
 	var nsgConf azurewrapper.NsgConfYML
 	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), "", nsgConf)
 	log.Printf("vpnGW Created ID: %s \n", to.String(vpnGW.ID))
-	log.Printf("vpnGW: %#v \n", vpnGW)
+	log.Printf("vpnGW Created Name: %s \n", to.String(vpnGW.Name))
 
 }
 
@@ -120,9 +120,14 @@ func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurew
 	vsite, _ := azurewrapper.CreateVpnSite(nsgConf.NsgData.NsgName, to.String(vwan.ID), nsgConf)
 	log.Printf("vsite1 Created Name: %s \n", nsgConf.NsgData.NsgName)
 
+	log.Printf("vpnGWName: %s \n", vpnGWName)
+	log.Printf("vhub ID: %s \n", to.String(vhub.ID))
+	log.Printf("vsite ID: %s \n", to.String(vsite.ID))
+	log.Printf("nsg CONF: %s \n", nsgConf)
+
 	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), to.String(vsite.ID), nsgConf)
 	log.Printf("vpnGW Created ID: %s \n", to.String(vpnGW.ID))
-	log.Printf("vpnGW: %#v \n", vpnGW)
+	log.Printf("vpnGW Created Name: %s \n", to.String(vpnGW.Name))
 
 	blobName := nsgConf.NsgData.NsgName
 
@@ -242,6 +247,7 @@ func main() {
 		if nsg != "all" {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
+			log.Println(nsgConf)
 			addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, nsgConf)
 		}
 		break

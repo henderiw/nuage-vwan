@@ -1,0 +1,3 @@
+[
+  {"configurationVersion":{"LastUpdatedTime":"2019-07-28T18:28:34.0226602Z","Version":"b2eb7413-f3c2-4dff-ace8-113a87f44f0a"},"vpnSiteConfiguration":{"Name":"vspkNsgE300WifiLte1","IPAddress":"81.246.71.160","LinkName":"vspkNsgE300WifiLte1"},"vpnSiteConnections":[{"hubConfiguration":{"AddressSpace":"10.1.1.0/24","Region":"North Europe"},"gatewayConfiguration":{"IpAddresses":{"Instance0":"52.142.122.117","Instance1":"52.142.122.17"}},"connectionConfiguration":{"IsBgpEnabled":false,"PSK":"testje","IPsecParameters":{"SADataSizeInKilobytes":102400000,"SALifeTimeInSeconds":3600}}}]}
+]
