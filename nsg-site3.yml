@@ -1,0 +1,6 @@
+nsg_data:
+  enterprise: vspk_public 
+  nsg_name: vspkNsgE300TestingAdditionalSite2
+  public_ip: 1.1.1.1
+  bgp_enabled: true
+  bgp_nsg_asn: 1111
