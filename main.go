@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -374,8 +373,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 		"AssociatedIKEAuthenticationID": ikePSK.ID,
 	}
 
-	ikeGatewayConn1 := nuagewrapper.NuageIKEGatewayConnection(ikeGatewayConnCfg1, nsVlan)
-	fmt.Println(ikeGatewayConn1)
+	ikeGatewayConn1 := nuagewrapper.NuageCreateIKEGatewayConnection(ikeGatewayConnCfg1, nsVlan)
+	log.Println(ikeGatewayConn1)
 
 	ikeGatewayConnCfg2 := map[string]interface{}{
 		"Name":                          "vspkdemoAzureIKEGatewayConnection2",
@@ -388,13 +387,59 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 		"AssociatedIKEAuthenticationID": ikePSK.ID,
 	}
 
-	ikeGatewayConn2 := nuagewrapper.NuageIKEGatewayConnection(ikeGatewayConnCfg2, nsVlan)
-	fmt.Println(ikeGatewayConn2)
+	ikeGatewayConn2 := nuagewrapper.NuageCreateIKEGatewayConnection(ikeGatewayConnCfg2, nsVlan)
+	log.Println(ikeGatewayConn2)
 
 }
 
 func deleteNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 
+	//Start session to VSD
+	var s *bambou.Session
+	s, Usr = vspk.NewSession(vsdUser, vsdPass, vsdEnterprise, vsdURL)
+	if err := s.Start(); err != nil {
+		log.Println("Unable to connect to Nuage VSD: " + err.Description)
+		os.Exit(1)
+	}
+
+	//find enterprise
+	enterpriseCfg := map[string]interface{}{
+		"Name": nsgConf.NsgData.Enterprise,
+	}
+
+	enterprise := nuagewrapper.NuageEnterprise(enterpriseCfg, Usr)
+
+	nsGatewayCfg := map[string]interface{}{
+		"Name": nsgConf.NsgData.NsgName,
+	}
+
+	nsGateway := nuagewrapper.NuageNSG(nsGatewayCfg, enterprise)
+
+	nsPortCfg := map[string]interface{}{
+		"Name": nsgConf.NsgData.NsgPort,
+	}
+
+	nsPort := nuagewrapper.NuageNSGPort(nsPortCfg, nsGateway)
+
+	nsVlanCfg := map[string]interface{}{
+		"Value": 0,
+	}
+
+	nsVlan := nuagewrapper.NuageVlan(nsVlanCfg, nsPort)
+
+	ikeGatewayConnCfg1 := map[string]interface{}{
+		"Name": "vspkdemoAzureIKEGatewayConnection1",
+	}
+
+	err1 := nuagewrapper.NuageDeleteIKEGatewayConnection(ikeGatewayConnCfg1, nsVlan)
+	log.Println(err1)
+
+	ikeGatewayConnCfg2 := map[string]interface{}{
+		"Name": "vspkdemoAzureIKEGatewayConnection2",
+	}
+
+	err2 := nuagewrapper.NuageDeleteIKEGatewayConnection(ikeGatewayConnCfg2, nsVlan)
+	log.Println(err2)
 }
 
 func main() {
