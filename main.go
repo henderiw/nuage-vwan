@@ -45,16 +45,16 @@ func init() {
 
 }
 
-func createVwanWorkflow(vwanName, vwanHubName, vpnGWName string) {
+func createVwanWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation string) {
 	vwan, _ := azurewrapper.CreateVwan(vwanName)
 	log.Printf("vwan Created Name: %s \n", to.String(vwan.Name))
 
-	vhub, _ := azurewrapper.CreateVhub(vwanHubName, to.String(vwan.ID), "10.1.1.0/24")
+	vhub, _ := azurewrapper.CreateVhub(vwanHubName, to.String(vwan.ID), "10.1.1.0/24", vhubLocation)
 	log.Printf("vhub Created Name: %s \n", to.String(vhub.Name))
 	log.Printf("vhub Created ID: %s \n", to.String(vhub.ID))
 
 	var nsgConf azurewrapper.NsgConfYML
-	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), "", nsgConf)
+	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), "", vhubLocation, nsgConf)
 	log.Printf("vpnGW Created ID: %s \n", to.String(vpnGW.ID))
 	log.Printf("vpnGW Created Name: %s \n", to.String(vpnGW.Name))
 
@@ -121,7 +121,47 @@ func getVwanWorkflow(vwanName, vwanHubName, vpnGWName string) {
 	}
 }
 
-func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurewrapper.NsgConfYML) {
+func createVhubWorkflow(vwanName, vwanHubName, vpnGWName, ipSubnet, vhubLocation string) {
+	vwan, _ := azurewrapper.GetVwan(vwanName)
+	log.Printf("vwan Name: %s \n", to.String(vwan.Name))
+
+	vhub, _ := azurewrapper.CreateVhub(vwanHubName, to.String(vwan.ID), ipSubnet, vhubLocation)
+	log.Printf("vhub Created Name: %s \n", to.String(vhub.Name))
+	log.Printf("vhub Created ID: %s \n", to.String(vhub.ID))
+
+	var nsgConf azurewrapper.NsgConfYML
+	log.Printf("vhub.ID ID: %s \n", to.String(vhub.ID))
+	log.Printf("nsgConf: %s \n", nsgConf)
+	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), "", vhubLocation, nsgConf)
+	log.Printf("vpnGW Created ID: %s \n", to.String(vpnGW.ID))
+	log.Printf("vpnGW Created Name: %s \n", to.String(vpnGW.Name))
+
+}
+
+func deleteVhubWorkflow(vwanName, vwanHubName, vpnGWName string) {
+	vpnGW, _ := azurewrapper.GetVpnGateway(vpnGWName)
+	log.Printf("vpnGW Name: %s \n", to.String(vpnGW.Name))
+	log.Printf("vpnGW ID: %s \n", to.String(vpnGW.ID))
+
+	if vpnGW.ID != nil {
+		if vpnGW.VpnGatewayProperties.Connections != nil {
+			idx := 0
+			for i, connection := range *vpnGW.VpnGatewayProperties.Connections {
+				log.Printf("Before deleting vWAN delete this Site first: %s \n", to.String(connection.RemoteVpnSite.ID))
+				idx = i
+			}
+			if idx != 0 {
+				log.Printf("Site Connection exists on GW")
+				return
+			}
+
+		}
+	}
+	azurewrapper.DeleteVpnGateway(vpnGWName)
+	azurewrapper.DeleteVhub(vwanHubName)
+}
+
+func getVhubWorkflow(vwanName, vwanHubName, vpnGWName string) {
 	vwan, _ := azurewrapper.GetVwan(vwanName)
 	log.Printf("VWAN Name: %s \n", to.String(vwan.Name))
 	log.Printf("VWAN ID: %s \n", to.String(vwan.ID))
@@ -130,7 +170,29 @@ func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurew
 	log.Printf("VHUB Name: %s \n", to.String(vhub.Name))
 	log.Printf("VHUB ID: %s \n", to.String(vhub.ID))
 
-	vsite, _ := azurewrapper.CreateVpnSite(nsgConf.NsgData.NsgName, to.String(vwan.ID), nsgConf)
+	vpnGW, _ := azurewrapper.GetVpnGateway(vpnGWName)
+	log.Printf("vpnGW Name: %s \n", to.String(vpnGW.Name))
+	log.Printf("vpnGW ID: %s \n", to.String(vpnGW.ID))
+
+	if vpnGW.ID != nil {
+		if vpnGW.VpnGatewayProperties.Connections != nil {
+			for _, connection := range *vpnGW.VpnGatewayProperties.Connections {
+				log.Printf("Site: %s \n", to.String(connection.RemoteVpnSite.ID))
+			}
+		}
+	}
+}
+
+func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation string, nsgConf azurewrapper.NsgConfYML) {
+	vwan, _ := azurewrapper.GetVwan(vwanName)
+	log.Printf("VWAN Name: %s \n", to.String(vwan.Name))
+	log.Printf("VWAN ID: %s \n", to.String(vwan.ID))
+
+	vhub, _ := azurewrapper.GetVhub(vwanHubName)
+	log.Printf("VHUB Name: %s \n", to.String(vhub.Name))
+	log.Printf("VHUB ID: %s \n", to.String(vhub.ID))
+
+	vsite, _ := azurewrapper.CreateVpnSite(nsgConf.NsgData.NsgName, to.String(vwan.ID), vhubLocation, nsgConf)
 	log.Printf("vsite1 Created Name: %s \n", nsgConf.NsgData.NsgName)
 
 	log.Printf("vpnGWName: %s \n", vpnGWName)
@@ -138,7 +200,7 @@ func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurew
 	log.Printf("vsite ID: %s \n", to.String(vsite.ID))
 	log.Printf("nsg CONF: %s \n", nsgConf)
 
-	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), to.String(vsite.ID), nsgConf)
+	vpnGW, _ := azurewrapper.CreateVpnGateway(vpnGWName, to.String(vhub.ID), to.String(vsite.ID), vhubLocation, nsgConf)
 	log.Printf("vpnGW Created ID: %s \n", to.String(vpnGW.ID))
 	log.Printf("vpnGW Created Name: %s \n", to.String(vpnGW.Name))
 
@@ -178,7 +240,7 @@ func addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurew
 
 }
 
-func deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azurewrapper.NsgConfYML) {
+func deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation string, nsgConf azurewrapper.NsgConfYML) {
 	vpnSite, _ := azurewrapper.GetVpnSite(nsgConf.NsgData.NsgName)
 	log.Printf("vpnSite Name: %s \n", to.String(vpnSite.Name))
 	log.Printf("vpnSite ID: %s \n", to.String(vpnSite.ID))
@@ -211,7 +273,7 @@ func deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azu
 			}
 		}
 	}
-	vpnGW, _ = azurewrapper.UpdateVpnGateway(vpnGWName, to.String(vpnGW.VirtualHub.ID), newVpnConnections)
+	vpnGW, _ = azurewrapper.UpdateVpnGateway(vpnGWName, to.String(vpnGW.VirtualHub.ID), vhubLocation, newVpnConnections)
 
 	if vpnGW.ID != nil {
 		if vpnGW.VpnGatewayProperties.Connections != nil {
@@ -223,7 +285,7 @@ func deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName string, nsgConf azu
 	azurewrapper.DeleteVpnSite(nsgConf.NsgData.NsgName)
 }
 
-func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
+func addNuageSiteWorkflow(vhub string, nsgConf azurewrapper.NsgConfYML) {
 	rcvdAzureVWanData, readErr := ioutil.ReadFile(nsgConf.NsgData.NsgName)
 	if readErr != nil {
 		log.Fatal(readErr)
@@ -267,8 +329,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	//create or get PSK
 
 	ikePSKCfg := map[string]interface{}{
-		"Name":           "vspkdemoAzure",
-		"Description":    "vspkdemoAzure",
+		"Name":           vhub + "vspkdemoAzure",
+		"Description":    vhub + "vspkdemoAzure",
 		"UnencryptedPSK": vwanSitePSK,
 	}
 
@@ -277,8 +339,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	//create IKE Gateway(s)
 
 	ikeGatewayCfg1 := map[string]interface{}{
-		"Name":        "vspkdemoAzureIKEGatewayName1",
-		"Description": "vspkdemoAzureIKEGatewayName1",
+		"Name":        vhub + "vspkdemoAzureIKEGatewayName1",
+		"Description": vhub + "vspkdemoAzureIKEGatewayName1",
 		"IKEVersion":  "V2",
 		"IPAddress":   vwanHubIP1,
 	}
@@ -286,8 +348,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	ikeGateway1 := nuagewrapper.NuageCreateIKEGateway(ikeGatewayCfg1, enterprise)
 
 	ikeGatewayCfg2 := map[string]interface{}{
-		"Name":        "vspkdemoAzureIKEGatewayName2",
-		"Description": "vspkdemoAzureIKEGatewayName2",
+		"Name":        vhub + "vspkdemoAzureIKEGatewayName2",
+		"Description": vhub + "vspkdemoAzureIKEGatewayName2",
 		"IKEVersion":  "V2",
 		"IPAddress":   vwanHubIP2,
 	}
@@ -297,8 +359,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	//Create IKE Encryption Profile
 
 	ikeEncryptionProfileCfg := map[string]interface{}{
-		"Name":                              "vspkdemoAzureIKEEncryptionProfile",
-		"Description":                       "vspkdemoAzureIKEEncryptionProfile",
+		"Name":                              vhub + "vspkdemoAzureIKEEncryptionProfile",
+		"Description":                       vhub + "vspkdemoAzureIKEEncryptionProfile",
 		"DPDMode":                           "REPLY_ONLY",
 		"ISAKMPAuthenticationMode":          "PRE_SHARED_KEY",
 		"ISAKMPDiffieHelmanGroupIdentifier": "GROUP_2_1024_BIT_DH",
@@ -318,8 +380,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	//Create IKE Gateway Profile
 
 	ikeGatewayProfileCfg1 := map[string]interface{}{
-		"Name":                             "vspkdemoAzureIKEGatewayProfile1",
-		"Description":                      "vspkdemoAzureIKEGatewayProfile1",
+		"Name":                             vhub + "vspkdemoAzureIKEGatewayProfile1",
+		"Description":                      vhub + "vspkdemoAzureIKEGatewayProfile1",
 		"AssociatedIKEAuthenticationID":    ikePSK.ID,
 		"IKEGatewayIdentifier":             vwanHubIP1,
 		"IKEGatewayIdentifierType":         "ID_IPV4_ADDR",
@@ -330,8 +392,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	ikeGatewayProfile1 := nuagewrapper.NuageCreateIKEGatewayProfile(ikeGatewayProfileCfg1, enterprise)
 
 	ikeGatewayProfileCfg2 := map[string]interface{}{
-		"Name":                             "vspkdemoAzureIKEGatewayProfile2",
-		"Description":                      "vspkdemoAzureIKEGatewayProfile2",
+		"Name":                             vhub + "vspkdemoAzureIKEGatewayProfile2",
+		"Description":                      vhub + "vspkdemoAzureIKEGatewayProfile2",
 		"AssociatedIKEAuthenticationID":    ikePSK.ID,
 		"IKEGatewayIdentifier":             vwanHubIP2,
 		"IKEGatewayIdentifierType":         "ID_IPV4_ADDR",
@@ -363,8 +425,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	nsVlan := nuagewrapper.NuageVlan(nsVlanCfg, nsPort)
 
 	ikeGatewayConnCfg1 := map[string]interface{}{
-		"Name":                          "vspkdemoAzureIKEGatewayConnection1",
-		"Description":                   "vspkdemoAzureIKEGatewayConnection1",
+		"Name":                          vhub + "vspkdemoAzureIKEGatewayConnection1",
+		"Description":                   vhub + "vspkdemoAzureIKEGatewayConnection1",
 		"NSGIdentifier":                 nsgConf.NsgData.NsgName,
 		"NSGIdentifierType":             "ID_KEY_ID",
 		"NSGRole":                       "INITIATOR",
@@ -377,8 +439,8 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	log.Println(ikeGatewayConn1)
 
 	ikeGatewayConnCfg2 := map[string]interface{}{
-		"Name":                          "vspkdemoAzureIKEGatewayConnection2",
-		"Description":                   "vspkdemoAzureIKEGatewayConnection2",
+		"Name":                          vhub + "vspkdemoAzureIKEGatewayConnection2",
+		"Description":                   vhub + "vspkdemoAzureIKEGatewayConnection2",
 		"NSGIdentifier":                 nsgConf.NsgData.NsgName,
 		"NSGIdentifierType":             "ID_KEY_ID",
 		"NSGRole":                       "INITIATOR",
@@ -392,7 +454,7 @@ func addNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 
 }
 
-func deleteNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
+func deleteNuageSiteWorkflow(vhub string, nsgConf azurewrapper.NsgConfYML) {
 
 	//Start session to VSD
 	var s *bambou.Session
@@ -428,14 +490,14 @@ func deleteNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 	nsVlan := nuagewrapper.NuageVlan(nsVlanCfg, nsPort)
 
 	ikeGatewayConnCfg1 := map[string]interface{}{
-		"Name": "vspkdemoAzureIKEGatewayConnection1",
+		"Name": vhub + "vspkdemoAzureIKEGatewayConnection1",
 	}
 
 	err1 := nuagewrapper.NuageDeleteIKEGatewayConnection(ikeGatewayConnCfg1, nsVlan)
 	log.Println(err1)
 
 	ikeGatewayConnCfg2 := map[string]interface{}{
-		"Name": "vspkdemoAzureIKEGatewayConnection2",
+		"Name": vhub + "vspkdemoAzureIKEGatewayConnection2",
 	}
 
 	err2 := nuagewrapper.NuageDeleteIKEGatewayConnection(ikeGatewayConnCfg2, nsVlan)
@@ -444,35 +506,53 @@ func deleteNuageSiteWorkflow(nsgConf azurewrapper.NsgConfYML) {
 
 func main() {
 
-	var vwan, enterprise, nsg, operation string
+	var vwan, vhub, vhubSubnet, vhubLocation, enterprise, nsg, operation string
 	flag.StringVar(&vwan, "vwan", "test", "vwan name")
+	flag.StringVar(&vhub, "vhub", "1", "vhub id")
+	flag.StringVar(&vhubSubnet, "vhubSubnet", "10.1.1.0/24", "vhub Subnnet")
+	flag.StringVar(&vhubLocation, "vhubLocation", "northeurope", "vhub Location")
 	flag.StringVar(&enterprise, "enterprise", "vspk_public", "enterprise name")
 	flag.StringVar(&nsg, "nsg", "nsg-site1.yml", "nsg name or group or all nsgs in the enterprise")
-	flag.StringVar(&operation, "o", "getVWAN", "createVWAN, deleteVWAN, getVWAN, addVWANSite, deleteVWANSite, addNuageSite, deleteNuageSite")
+	flag.StringVar(&operation, "o", "getVWAN", "createVWAN, deleteVWAN, getVWAN, createVHUB, deleteVHUB, getVHUB, addVWANSite, deleteVWANSite, addNuageSite, deleteNuageSite")
 
 	flag.Parse()
 
 	log.Println("vwan:", vwan)
+	log.Println("vhub:", vhub)
+	log.Println("vhub Subnet:", vhubSubnet)
+	log.Println("vhub Location:", vhubLocation)
 	log.Println("enterprise:", enterprise)
 	log.Println("nsg:", nsg)
 	log.Println("operation:", operation)
 
 	vwanName := "vwan" + vwan
-	vwanHubName := "vwanHub" + vwan
-	vpnGWName := "vpnGw" + vwan
+	vwanHubName := "vwanHub" + vwan + vhub
+	vpnGWName := "vpnGw" + vwan + vhub
 
 	switch operation {
 	case "createVWAN":
-		log.Println("Create Workflow")
-		createVwanWorkflow(vwanName, vwanHubName, vpnGWName)
+		log.Println("Create VWAN Workflow")
+		createVwanWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation)
 		break
 	case "deleteVWAN":
-		log.Println("Delete Workflow")
+		log.Println("Delete VWAN Workflow")
 		deleteVwanWorkflow(vwanName, vwanHubName, vpnGWName)
 		break
 	case "getVWAN":
-		log.Println("get Workflow")
+		log.Println("get VWAN Workflow")
 		getVwanWorkflow(vwanName, vwanHubName, vpnGWName)
+		break
+	case "createVHUB":
+		log.Println("Create VHUB Workflow")
+		createVhubWorkflow(vwanName, vwanHubName, vpnGWName, vhubSubnet, vhubLocation)
+		break
+	case "deleteVHUB":
+		log.Println("Delete VHUB Workflow")
+		deleteVhubWorkflow(vwanName, vwanHubName, vpnGWName)
+		break
+	case "getVHUB":
+		log.Println("get VHUB Workflow")
+		getVhubWorkflow(vwanName, vwanHubName, vpnGWName)
 		break
 	case "addVWANSite":
 		log.Println("add VWAN Site Workflow")
@@ -480,7 +560,7 @@ func main() {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
 			log.Println(nsgConf)
-			addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, nsgConf)
+			addVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation, nsgConf)
 		}
 		break
 	case "deleteVWANSite":
@@ -488,7 +568,7 @@ func main() {
 		if nsg != "all" {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
-			deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, nsgConf)
+			deleteVwanSiteWorkflow(vwanName, vwanHubName, vpnGWName, vhubLocation, nsgConf)
 		}
 		break
 	case "addNuageSite":
@@ -497,7 +577,7 @@ func main() {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
 			log.Println(nsgConf)
-			addNuageSiteWorkflow(nsgConf)
+			addNuageSiteWorkflow(vwanHubName, nsgConf)
 		}
 		break
 	case "deleteNuageSite":
@@ -505,11 +585,11 @@ func main() {
 		if nsg != "all" {
 			var nsgConf azurewrapper.NsgConfYML
 			nsgConf.GetConf(nsg)
-			deleteNuageSiteWorkflow(nsgConf)
+			deleteNuageSiteWorkflow(vwanHubName, nsgConf)
 		}
 		break
 	default:
-		log.Fatalln("Wrong Operation Input (create, delete or get)")
+		log.Fatalln("Wrong Operation Input (create, delete, add or get)")
 
 	}
 }

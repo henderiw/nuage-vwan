@@ -1,11 +1,10 @@
 nsg_data:
   enterprise: vspk_public 
-  nsg_name: vspkNsgE300TestingAdditionalSite
+  nsg_name: vspkNsgE200Wifi1
   nsg_port: port1
-  public_ip: 1.1.1.1
+  public_ip: 81.82.181.214
   bgp_enabled: false
   bgp_nsg_asn: 1111
   lan_subnet: 
-    - 172.0.10.0/24
-    - 172.0.20.0/24
+    - 172.0.3.0/24
       
